@@ -1,5 +1,6 @@
 #define OLC_PGE_APPLICATION
 #include "glob.hpp"
+#include "time.h"
 
 class SandEngine : public olc::PixelGameEngine {
 public:
@@ -40,6 +41,8 @@ public:
 			for (int y = 0; y < G_SIZE; y++)
 				data[(x * G_SIZE) + y] = BACK;
 
+		srand(time(NULL));
+
 		return true;
 	}
 
@@ -47,8 +50,12 @@ public:
 
 		selected = CellTypes[index];
 
+		// Input on any frame
 		if (GetKey(olc::ESCAPE).bPressed) return false;
 		if (GetKey(olc::TAB).bPressed) index = (++index % (sizeof(Cells) - 1));
+		if (GetKey(olc::C).bPressed)
+			for (int i = 0; i < G_SIZE * G_SIZE; i++)
+				data[i] = BACK;
 
 		fAccumulatedTime += fElapsedTime;
 		if (fAccumulatedTime >= fTargetFrameTime) {
@@ -56,6 +63,7 @@ public:
 			fElapsedTime = fTargetFrameTime;
 		} else return true;
 
+		// Input only on rendered frames
 		if (GetKey(olc::Q).bHeld) if (r < 20) r++;
 		if (GetKey(olc::E).bHeld) if (r > 4) r--;
 
@@ -65,33 +73,44 @@ public:
 			for (int y = G_SIZE; y >= 0; y--) {
 				if (x == 0 || y == 0 || x == G_SIZE - 1 || y == G_SIZE - 1) data[(x * G_SIZE) + y] = SOLID;
 
-				if (data[(x * G_SIZE) + y] & SAND) {
-					if (!(data[(x * G_SIZE) + (y + 1)] & SOLID)) { // Below
+				auto cell = data[(x * G_SIZE) + y];
+				auto below = data[(x * G_SIZE) + (y + 1)];
+				auto left = data[((x - 1) * G_SIZE) + y];
+				auto right = data[((x + 1) * G_SIZE) + y];
+				auto down_left  = data[((x - 1) * G_SIZE) + (y + 1)];
+				auto down_right = data[((x + 1) * G_SIZE) + (y + 1)];
+
+				// Sand
+				if (cell & SAND) {
+					if (below & WATER) { // Below is water
+						data[(x * G_SIZE) + y] = WATER + MOVING;
+						data[(x * G_SIZE) + (y + 1)] = SAND + MOVING;
+					}
+					if (!(below & SOLID)) { // Below
 						data[(x * G_SIZE) + y] = BACK;
 						data[(x * G_SIZE) + (y + 1)] = SAND + MOVING;
 						continue;
 					}
 
-					// Sand
-					if ((int)fElapsedTime % 2 == 0) {
-						if (!(data[((x - 1) * G_SIZE) + (y + 1)] & SOLID)) { // Down left
+					if (rand() % 2 == 0) {
+						if (!(down_left & SOLID)) { // Down left
 							data[(x * G_SIZE) + y] = BACK;
 							data[((x - 1) * G_SIZE) + (y + 1)] = SAND + MOVING;
 							continue;
 						}
-						if (!(data[((x + 1) * G_SIZE) + (y + 1)] & SOLID)) { // Down right
+						if (!(down_right & SOLID)) { // Down right
 							data[(x * G_SIZE) + y] = BACK;
 							data[((x + 1) * G_SIZE) + (y + 1)] = SAND + MOVING;
 							continue;
 						}
 					}
 
-					if (!(data[((x + 1) * G_SIZE) + (y + 1)] & SOLID)) { // Down right
+					if (!(down_right & SOLID)) { // Down right
 						data[(x * G_SIZE) + y] = BACK;
 						data[((x + 1) * G_SIZE) + (y + 1)] = SAND + MOVING;
 						continue;
 					}
-					if (!(data[((x - 1) * G_SIZE) + (y + 1)] & SOLID)) { // Down left
+					if (!(down_left & SOLID)) { // Down left
 						data[(x * G_SIZE) + y] = BACK;
 						data[((x - 1) * G_SIZE) + (y + 1)] = SAND + MOVING;
 						continue;
@@ -101,77 +120,44 @@ public:
 				}
 
 				// Water
-				if (data[(x * G_SIZE) + y] & WATER) {
-					int temp;
-
-					if (!(data[(x * G_SIZE) + (y + 1)] & SOLID)) { // Below
-						data[(x * G_SIZE) + y] = data[(x * G_SIZE) + (y + 1)];
+				if (cell & WATER) {
+					if (!(below & SOLID)) { // Below
+						data[(x * G_SIZE) + y] = BACK;
 						data[(x * G_SIZE) + (y + 1)] = WATER + MOVING;
 						continue;
 					}
 
-					if ((int)fElapsedTime % 2 == 0) {
-						if (!(data[((x - 1) * G_SIZE) + (y + 1)] & SOLID)) { // Down left
-							data[(x * G_SIZE) + y] = data[((x - 1) * G_SIZE) + (y + 1)];
-							data[((x - 1) * G_SIZE) + (y + 1)] = WATER + MOVING;
-							continue;
-						}
-						if (!(data[((x + 1) * G_SIZE) + (y + 1)] & SOLID)) { // Down right
-							data[(x * G_SIZE) + y] = data[((x + 1) * G_SIZE) + (y + 1)];
-							data[((x + 1) * G_SIZE) + (y + 1)] = WATER + MOVING;
-							continue;
-						}
-						if (!(data[((x - 1) * G_SIZE) + (y + 2)] & SOLID)) { // Down 2 left
-							data[(x * G_SIZE) + y] = data[((x - 1) * G_SIZE) + (y + 1)];
-							data[((x - 1) * G_SIZE) + (y + 2)] = WATER + MOVING;
-							continue;
-						}
-						if (!(data[((x + 1) * G_SIZE) + (y + 2)] & SOLID)) { // Down 2 right
-							data[(x * G_SIZE) + y] = data[((x + 1) * G_SIZE) + (y + 1)];
-							data[((x + 1) * G_SIZE) + (y + 2)] = WATER + MOVING;
-							continue;
-						}
-						if (!(data[((x - 1) * G_SIZE) + y] & SOLID) && !(data[((x - 1) * G_SIZE) + y] & WATER)) { // Left
-							data[(x * G_SIZE) + y] = data[((x - 1) * G_SIZE) + y];
+					if (rand() % 2 == 0) {
+						if (!(left & SOLID) && !(left & MOVING)) { // Left
+							data[(x * G_SIZE) + y] = BACK;
 							data[((x - 1) * G_SIZE) + y] = WATER + MOVING;
 							continue;
 						}
+						if (!(right & SOLID) && !(right & MOVING)) { // Right
+							data[(x * G_SIZE) + y] = BACK;
+							data[((x + 1) * G_SIZE) + y] = WATER + MOVING;
+							continue;
+						}
+						if (!(down_right & SOLID) && !(down_right & MOVING)) { // Down right
+							data[(x * G_SIZE) + y] = BACK;
+							data[((x + 1) * G_SIZE) + (y + 1)] = WATER + MOVING;
+							continue;
+						}
+						if (!(down_left & SOLID) && !(down_left & MOVING)) { // Down left
+							data[(x * G_SIZE) + y] = BACK;
+							data[((x - 1) * G_SIZE) + (y + 1)] = WATER + MOVING;
+							continue;
+						}
 					}
 
-					if (!(data[((x - 1) * G_SIZE) + (y + 1)] & SOLID)) { // Down left
-						data[(x * G_SIZE) + y] = data[((x - 1) * G_SIZE) + (y + 1)];
-						data[((x - 1) * G_SIZE) + (y + 1)] = WATER + MOVING;
-						continue;
-					}
-					if (!(data[((x + 1) * G_SIZE) + (y + 1)] & SOLID)) { // Down right
-						data[(x * G_SIZE) + y] = data[((x + 1) * G_SIZE) + (y + 1)];
-						data[((x + 1) * G_SIZE) + (y + 1)] = WATER + MOVING;
-						continue;
-					}
-					if (!(data[((x - 1) * G_SIZE) + (y + 2)] & SOLID)) { // Down 2 left
-						data[(x * G_SIZE) + y] = data[((x - 1) * G_SIZE) + (y + 1)];
-						data[((x - 1) * G_SIZE) + (y + 2)] = WATER + MOVING;
-						continue;
-					}
-					if (!(data[((x + 1) * G_SIZE) + (y + 2)] & SOLID)) { // Down 2 right
-						data[(x * G_SIZE) + y] = data[((x + 1) * G_SIZE) + (y + 1)];
-						data[((x + 1) * G_SIZE) + (y + 2)] = WATER + MOVING;
-						continue;
-					}
-					if (!(data[((x + 1) * G_SIZE) + y] & SOLID) && !(data[((x + 1) * G_SIZE) + y] & WATER)) { // Right
-						data[(x * G_SIZE) + y] = data[((x + 1) * G_SIZE) + y];
-						data[((x + 1) * G_SIZE) + y] = WATER + MOVING;
-						continue;
-					}
-
-					data[(x * G_SIZE) + y] = WATER & SOLID;
+					data[(x * G_SIZE) + y] = WATER + SOLID;
 				}
 			}
 		}
 
 
-		for (int x = 0; x < G_SIZE; x++) {
-			for (int y = 0; y < G_SIZE; y++) {
+		for (int x = G_SIZE; x >= 0; x--) {
+			for (int y = G_SIZE; y >= 0; y--) {
 				if (data[(x * G_SIZE) + y] == SOLID)
 					this->Draw(olc::vi2d(x, y), olc::GREY);
 				if (data[(x * G_SIZE) + y] & SAND)
